@@ -35,7 +35,7 @@
 
   (defmacro funcall-if (fn arg)
     (once-only (fn)
-	       `(if ,fn (funcall ,fn ,arg) ,arg)))
+      `(if ,fn (funcall ,fn ,arg) ,arg)))
 
   (defmacro read-time-case (first-case &rest other-cases)
     "Do the first case, where normally cases are
