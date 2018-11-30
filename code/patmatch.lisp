@@ -8,10 +8,6 @@
 
 ;;; The basic are in auxfns.lisp; look for "PATTERN MATCHING FACILITY"
 
-(defun variable-p (x)
-  "Is x a variable (a symbol beginning with `?')?"
-  (and (symbolp x) (equal (elt (symbol-name x) 0) #\?)))
-
 (defun pat-match (pattern input &optional (bindings no-bindings))
   "Match pattern against input in the context of the bindings"
   (cond ((eq bindings fail) fail)
