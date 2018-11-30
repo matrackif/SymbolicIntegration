@@ -5,4 +5,5 @@
     :components
     ((:file "auxfns")
      (:file "patmatch")
-     (:file "integration")))))
+     (:file "integration")
+     (:file "macsymar")))))
