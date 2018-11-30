@@ -5,107 +5,6 @@
 ;;; File auxfns.lisp: Auxiliary functions used by all other programs
 ;;; Load this file before running any other programs.
 
-;;;; Implementation-Specific Details
-
-(eval-when (eval compile load)
-  ;; Make it ok to place a function definition on a built-in LISP symbol.
-  #+(or Allegro EXCL)
-  (dolist (pkg '(excl common-lisp common-lisp-user))
-    (setf (excl:package-definition-lock (find-package pkg)) nil))
-
-  ;; Don't warn if a function is defined in multiple files --
-  ;; this happens often since we refine several programs.
-  #+Lispworks
-  (setq *PACKAGES-FOR-WARN-ON-REDEFINITION* nil)
-
-  #+LCL 
-   (compiler-options :warnings nil)
-  #+sbcl
-  (progn
-    (sb-ext:unlock-package '#:common-lisp)
-    (sb-ext:unlock-package '#:common-lisp-user)))
-
-;;;; REQUIRES
-
-;;; The function REQUIRES is used in subsequent files to state dependencies
-;;; between files.  The current definition just loads the required files when it has not yet
-;;; been loaded, assumming they match the pathname specified in *PAIP-DIRECTORY*.
-;;; You should change that to match where you have stored the files.
-;;; A more sophisticated REQUIRES would search in different directories if needed.
-
-(defvar *paip-modules* '())
-
-(defvar *paip-files*
-  `("auxfns" "tutor" "examples" 
-    "intro" "simple" "overview" "gps1" "gps" "eliza1" "eliza" "patmatch" 
-    "eliza-pm" "search" "gps-srch" "student" "macsyma" "macsymar" "unify" 
-    "prolog1" "prolog" "prologc1" "prologc2" "prologc" "prologcp" 
-    "clos" "krep1" "krep2" "krep" "cmacsyma" "mycin" "mycin-r" "waltz" 
-    "othello" "othello2" "syntax1" "syntax2" "syntax3" "unifgram" 
-    "grammar" "lexicon" "interp1" "interp2" "interp3" 
-    "compile1" "compile2" "compile3" "compopt"))
-
-(defun requires (&rest files)
-  "The arguments are files that are required to run an application."
-  (loop for file in files
-     for name = (string-downcase file)
-     unless (find name *paip-modules* :test 'equal)
-     collect (progn
-               (push name *paip-modules*)
-               (load-paip-file name))))
-
-(defparameter *paip-directory*
-  (make-pathname :name nil :type nil
-		 :defaults (or #.(and (boundp '*compile-file-truename*) *compile-file-truename*)
-			       (and (boundp '*load-truename*) *load-truename*)
-			       (truename ""))) ;;??? Maybe Change this
-  "The location of the source files for this book.  If things don't work,
-  change it to reflect the location of the files on your computer.")
-
-(defparameter *paip-source* 
-  (make-pathname :name nil :type "lisp" ;;???  Maybe Change this
-		 :defaults *paip-directory*)) 
-
-(defparameter *paip-binary*
-  (make-pathname
-   :name nil
-   :type (first (list #+LCL (first *load-binary-pathname-types*)
-		      #+Lispworks system::*binary-file-type*
-		      #+MCL "fasl"
-		      #+Allegro excl:*fasl-default-type*
-		      #+(or AKCL KCL) "o"
-		      #+CMU "sparcf"
-		      #+CLISP "fas"
-		      "bin"))  ;;???  Maybe Change this
-   :directory (append (pathname-directory *paip-source*) '("bin"))
-   :defaults *paip-directory*))
-
-(defun paip-pathname (name &optional (type :lisp))
-  (make-pathname :name name 
-		 :defaults (ecase type
-			     ((:lisp :source) *paip-source*)
-			     ((:binary :bin) *paip-binary*))))
-
-(defun compile-all-paip-files ()
-  (mapc #'compile-paip-file *paip-files*))
-
-(defun compile-paip-file (name)
-  (let ((path (paip-pathname name :lisp)))
-    (load path)
-    (compile-file path :output-file (ensure-directories-exist (paip-pathname name :binary)))))
-
-(defun load-paip-file (file)
-  "Load the binary file if it exists and is newer, else load the source."
-  (let* ((src (paip-pathname file :lisp))
-	 (src-date (file-write-date src))
-	 (bin (paip-pathname file :binary))
-	 (bin-date (ignore-errors (file-write-date bin)))
-	 (*package* (or (find-package :paip)
-                        *package*)))
-    (load (if (and (probe-file bin) src-date bin-date (>= bin-date src-date))
-	      bin
-              src))))
-
 ;;;; Macros (formerly in auxmacs.lisp: that file no longer needed)
 
 (eval-when (load eval compile)
@@ -218,13 +117,9 @@
 ;;; Therefore, it would be best to rename the function SYMBOL to something 
 ;;; else.  This has not been done (for compatibility with the book).  
 
-(defun symbol (&rest args)
+(defun concatenate-to-symbol (&rest args)
   "Concatenate symbols or strings to form an interned symbol"
   (intern (format nil "~{~a~}" args)))
-
-(defun new-symbol (&rest args)
-  "Concatenate symbols or strings to form an uninterned symbol"
-  (make-symbol (format nil "~{~a~}" args)))
 
 (defun last1 (list)
   "Return the last element (not last cons cell) of list"
@@ -259,34 +154,6 @@
 (defun compose (&rest functions)
   #'(lambda (x)
       (reduce #'funcall functions :from-end t :initial-value x)))
-
-;;;; The Debugging Output Facility:
-
-(defvar *dbg-ids* nil "Identifiers used by dbg")
-
-(defun dbg (id format-string &rest args)
-  "Print debugging info if (DEBUG ID) has been specified."
-  (when (member id *dbg-ids*)
-    (fresh-line *debug-io*)
-    (apply #'format *debug-io* format-string args)))
-
-(defun debug (&rest ids)
-  "Start dbg output on the given ids."
-  (setf *dbg-ids* (union ids *dbg-ids*)))
-
-(defun undebug (&rest ids)
-  "Stop dbg on the ids.  With no ids, stop dbg altogether."
-  (setf *dbg-ids* (if (null ids) nil
-                      (set-difference *dbg-ids* ids))))
-
-;;; ==============================
-
-(defun dbg-indent (id indent format-string &rest args)
-  "Print indented debugging info if (DEBUG ID) has been specified."
-  (when (member id *dbg-ids*)
-    (fresh-line *debug-io*)
-    (dotimes (i indent) (princ "  " *debug-io*))
-    (apply #'format *debug-io* format-string args)))
 
 ;;;; PATTERN MATCHING FACILITY
 
@@ -391,9 +258,9 @@
 
 (defmacro defresource (name &key constructor (initial-copies 0)
                        (size (max initial-copies 10)))
-  (let ((resource (symbol '* (symbol name '-resource*)))
-        (deallocate (symbol 'deallocate- name))
-        (allocate (symbol 'allocate- name)))
+  (let ((resource (concatenate-to-symbol '* (concatenate-to-symbol name '-resource*)))
+        (deallocate (concatenate-to-symbol 'deallocate- name))
+        (allocate (concatenate-to-symbol 'allocate- name)))
     `(progn
        (defparameter ,resource (make-array ,size :fill-pointer 0))
        (defun ,allocate ()
@@ -411,8 +278,8 @@
 
 (defmacro with-resource ((var resource &optional protect) &rest body)
   "Execute body with VAR bound to an instance of RESOURCE."
-  (let ((allocate (symbol 'allocate- resource))
-        (deallocate (symbol 'deallocate- resource)))
+  (let ((allocate (concatenate-to-symbol 'allocate- resource))
+        (deallocate (concatenate-to-symbol 'deallocate- resource)))
     (if protect
         `(let ((,var nil))
            (unwind-protect (progn (setf ,var (,allocate)) ,@body)
@@ -505,9 +372,9 @@
   "Represent an enumerated type with integers 0-n."
   `(progn
      (deftype ,type () '(integer 0 ,(- (length elements) 1)))
-     (defun ,(symbol type '->symbol) (,type)
+     (defun ,(concatenate-to-symbol type '->symbol) (,type)
        (elt ',elements ,type))
-     (defun ,(symbol 'symbol-> type) (symbol)
+     (defun ,(concatenate-to-symbol 'symbol-> type) (concatenate-to-symbol)
        (position symbol ',elements))
      ,@(loop for element in elements
              for i from 0
@@ -698,5 +565,3 @@
                                (funcall-if key (pop seq))))))
              result))))
 )
-
-(pushnew "auxfns" *paip-modules* :test 'equal)
