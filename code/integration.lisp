@@ -1,3 +1,9 @@
+;;;; -*- Mode: Lisp; Syntax: Common-Lisp -*-
+;;;; Code from Paradigms of AI Programming
+;;;; Copyright (c) 1991 Peter Norvig
+
+;;;; File macsyma.lisp: The implementation of MACSYMA in Chapter 8
+
 (defun variable-p (exp)
   "Variables are the symbols M through Z."
   ;; put x,y,z first to find them a little faster
