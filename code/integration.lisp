@@ -192,22 +192,23 @@
         ((find-anywhere item (rest tree)))))
 
 (defun integrate (exp x)
-  ;; First try some trivial cases
-  (cond
-    ((free-of exp x) `(* ,exp x))          ; Int c dx = c*x
-    ((starts-with exp '+)                  ; Int f + g  = 
-     `(+ ,(integrate (exp-lhs exp) x)      ;   Int f + Int g
-         ,(integrate (exp-rhs exp) x)))
-    ((starts-with exp '-)              
-     (ecase (length (exp-args exp))        
-       (1 (integrate (exp-lhs exp) x))     ; Int - f = - Int f
-       (2 `(- ,(integrate (exp-lhs exp) x) ; Int f - g  =
-              ,(integrate (exp-rhs exp) x)))))  ; Int f - Int g
-    ;; Now move the constant factors to the left of the integral
-    ((multiple-value-bind (const-factors x-factors)
-         (partition-if #'(lambda (factor) (free-of factor x))
-                       (factorize exp))
-       (identity ;simplify
+  (simplify
+   ;; First try some trivial cases
+   (cond
+     ((free-of exp x) `(* ,exp x))          ; Int c dx = c*x
+     ((starts-with exp '+)                  ; Int f + g  =
+      `(+ ,(integrate (exp-lhs exp) x)      ;   Int f + Int g
+          ,(integrate (exp-rhs exp) x)))
+     ((starts-with exp '-)
+      (ecase (length (exp-args exp))
+        (1 (integrate (exp-lhs exp) x))     ; Int - f = - Int f
+        (2 `(- ,(integrate (exp-lhs exp) x) ; Int f - g  =
+               ,(integrate (exp-rhs exp) x)))))  ; Int f - Int g
+     ;; Now move the constant factors to the left of the integral
+     ((multiple-value-bind (const-factors x-factors)
+          (partition-if #'(lambda (factor) (free-of factor x))
+                        (factorize exp))
+        (identity ;simplify
          `(* ,(unfactorize const-factors)
              ;; And try to integrate:
              ,(cond ((null x-factors) x)
@@ -215,7 +216,7 @@
                                (deriv-divides factor x-factors x))
                            x-factors))
                     ;; <other methods here>
-                    (t `(int? ,(unfactorize x-factors) ,x)))))))))
+                    (t `(int? ,(unfactorize x-factors) ,x))))))))))
 
 (defun partition-if (pred list)
   "Return 2 values: elements of list that satisfy pred,
